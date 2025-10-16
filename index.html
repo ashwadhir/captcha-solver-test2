@@ -1,3 +1,4 @@
+**`index.html`**
 
 <!DOCTYPE html>
 <html lang="en">
@@ -55,6 +56,12 @@
             max-width: 90%;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
+        #confidence-score { /* New style for confidence score */
+            margin-top: 10px;
+            font-size: 1.1em;
+            color: #6c757d;
+            font-weight: bold;
+        }
         .error-message {
             color: #dc3545;
         }
@@ -70,6 +77,8 @@
     <p id="status-message" aria-live="polite">Initializing...</p>
     <!-- Element to display the solved captcha text -->
     <div id="solved-text"></div>
+    <!-- New element to display OCR confidence score -->
+    <p id="confidence-score" aria-live="polite">Confidence: N/A</p>
 
     <script>
         // CRITICAL UNIVERSAL RULE 1: All custom JavaScript logic MUST be wrapped in DOMContentLoaded.
@@ -78,13 +87,18 @@
             const captchaImage = document.querySelector('#captcha-image');
             const statusMessage = document.querySelector('#status-message');
             const solvedText = document.querySelector('#solved-text');
+            const confidenceScore = document.querySelector('#confidence-score'); // New: Get confidence score element
 
-            if (!captchaImage || !statusMessage || !solvedText) {
-                console.error('Error: Required DOM elements (#captcha-image, #status-message, #solved-text) not found.');
+            if (!captchaImage || !statusMessage || !solvedText || !confidenceScore) { // Updated check
+                console.error('Error: Required DOM elements (#captcha-image, #status-message, #solved-text, #confidence-score) not found.');
                 // Provide user feedback even if some elements are missing
                 if (statusMessage) {
                     statusMessage.textContent = 'Fatal Error: Essential page elements are missing. Cannot proceed.';
                     statusMessage.classList.add('error-message');
+                }
+                if (confidenceScore) { // New: Set error state for confidence if it exists
+                    confidenceScore.textContent = 'Confidence: Error';
+                    confidenceScore.style.color = '#dc3545';
                 }
                 return; // Stop execution if critical elements are missing
             }
@@ -94,12 +108,15 @@
             // CRITICAL UNIVERSAL RULE 5: Provide initial loading state.
             statusMessage.textContent = 'Loading captcha image...';
             statusMessage.style.color = '#007bff'; // Initial loading color
+            confidenceScore.textContent = 'Confidence: Loading...'; // New: Initial state for confidence score
+            confidenceScore.style.color = '#007bff';
 
             // CRITICAL UNIVERSAL RULE 1: Any code that processes an image MUST be placed inside an image.onload callback.
             captchaImage.onload = async () => {
                 // CRITICAL UNIVERSAL RULE 5: Update loading state.
                 statusMessage.textContent = 'Captcha image loaded. Solving captcha with Tesseract.js...';
                 solvedText.textContent = ''; // Clear any previous content
+                confidenceScore.textContent = 'Confidence: Processing...'; // New: Update confidence status
 
                 let worker; // Declare worker outside try-catch for access in finally block
                 // CRITICAL UNIVERSAL RULE 2: Wrap network requests or async operations in try...catch for error handling.
@@ -109,7 +126,8 @@
 
                     // Perform OCR on the loaded image
                     // The `recognize` function can take an HTMLImageElement directly.
-                    const { data: { text } } = await worker.recognize(captchaImage);
+                    // New: Destructure `confidence` from the data object
+                    const { data: { text, confidence } } = await worker.recognize(captchaImage);
 
                     // CRITICAL UNIVERSAL RULE 5: Update status with result.
                     // Also fulfills Acceptance Criteria: document.querySelector("#solved-text").textContent.length > 0
@@ -117,11 +135,23 @@
                         solvedText.textContent = `Solved Text: ${text.trim()}`;
                         statusMessage.textContent = 'Captcha solved successfully!';
                         statusMessage.style.color = '#28a745'; // Green for success
+
+                        // New Logic: Display OCR confidence score
+                        if (typeof confidence === 'number') {
+                            const formattedConfidence = (confidence * 100).toFixed(0); // Format as whole percentage
+                            confidenceScore.textContent = `Confidence: ${formattedConfidence}%`;
+                            confidenceScore.style.color = '#0056b3'; // A distinct color for confidence
+                        } else {
+                            confidenceScore.textContent = 'Confidence: Not available';
+                            confidenceScore.style.color = '#6c757d'; // Grey for not available
+                        }
                     } else {
                         // Handle case where OCR runs but finds no text
                         solvedText.textContent = 'Solved Text: No readable text found or text is empty.';
                         statusMessage.textContent = 'OCR completed, but no meaningful text was extracted.';
                         statusMessage.style.color = '#ffc107'; // Yellow for warning
+                        confidenceScore.textContent = 'Confidence: Low or N/A'; // New: Indicate confidence issue
+                        confidenceScore.style.color = '#ffc107';
                     }
 
                 } catch (error) {
@@ -131,6 +161,8 @@
                     statusMessage.classList.add('error-message'); // Apply error styling
                     statusMessage.style.color = '#dc3545'; // Red for error
                     solvedText.textContent = 'Failed to solve captcha due to an internal error.';
+                    confidenceScore.textContent = 'Confidence: Error'; // New: Indicate confidence error
+                    confidenceScore.style.color = '#dc3545';
                 } finally {
                     // Always terminate the Tesseract.js worker to free up resources.
                     if (worker) {
@@ -148,6 +180,8 @@
                 statusMessage.classList.add('error-message');
                 statusMessage.style.color = '#dc3545'; // Red for error
                 solvedText.textContent = 'Image loading failed.';
+                confidenceScore.textContent = 'Confidence: Image Load Error'; // New: Indicate error
+                confidenceScore.style.color = '#dc3545';
             };
 
             // Set the image source, which triggers onload or onerror
