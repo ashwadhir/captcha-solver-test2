@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captcha Solver</title>
+    <!-- Tesseract.js CDN for OCR capabilities -->
+    <script src="https://unpkg.com/tesseract.js@5.0.0/dist/tesseract.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+            background-color: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #0056b3;
+        }
+        #captcha-container {
+            margin-top: 25px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            background-color: #fff;
+            display: inline-block;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        #captcha-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #eee;
+            vertical-align: middle;
+            border-radius: 4px;
+        }
+        #status-message {
+            margin-top: 20px;
+            font-weight: bold;
+            color: #007bff;
+            font-size: 1.1em;
+        }
+        #solved-text {
+            margin-top: 25px;
+            font-size: 1.8em;
+            color: #28a745;
+            font-weight: bold;
+            word-break: break-all;
+            background-color: #e9f7ef;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #c3e6cb;
+            display: inline-block;
+            max-width: 90%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .error-message {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <h1>Captcha Solver</h1>
+    <div id="captcha-container">
+        <p>Captcha Image to be processed:</p>
+        <img id="captcha-image" src="" alt="Captcha image for OCR processing">
+    </div>
+    <!-- Status message for user feedback during processing -->
+    <p id="status-message" aria-live="polite">Initializing...</p>
+    <!-- Element to display the solved captcha text -->
+    <div id="solved-text"></div>
+
+    <script>
+        // CRITICAL UNIVERSAL RULE 1: All custom JavaScript logic MUST be wrapped in DOMContentLoaded.
+        document.addEventListener('DOMContentLoaded', () => {
+            // CRITICAL UNIVERSAL RULE 3: Verify DOM elements exist before interaction.
+            const captchaImage = document.querySelector('#captcha-image');
+            const statusMessage = document.querySelector('#status-message');
+            const solvedText = document.querySelector('#solved-text');
+
+            if (!captchaImage || !statusMessage || !solvedText) {
+                console.error('Error: Required DOM elements (#captcha-image, #status-message, #solved-text) not found.');
+                // Provide user feedback even if some elements are missing
+                if (statusMessage) {
+                    statusMessage.textContent = 'Fatal Error: Essential page elements are missing. Cannot proceed.';
+                    statusMessage.classList.add('error-message');
+                }
+                return; // Stop execution if critical elements are missing
+            }
+
+            const captchaImageUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSHwBqmOJIaptk4X2VPMa5ndTYKgnYRjCml5XYvP10IdIosrKcw1Xj5vYL5Lvz54UJBaFM&usqp=CAU';
+
+            // CRITICAL UNIVERSAL RULE 5: Provide initial loading state.
+            statusMessage.textContent = 'Loading captcha image...';
+            statusMessage.style.color = '#007bff'; // Initial loading color
+
+            // CRITICAL UNIVERSAL RULE 1: Any code that processes an image MUST be placed inside an image.onload callback.
+            captchaImage.onload = async () => {
+                // CRITICAL UNIVERSAL RULE 5: Update loading state.
+                statusMessage.textContent = 'Captcha image loaded. Solving captcha with Tesseract.js...';
+                solvedText.textContent = ''; // Clear any previous content
+
+                let worker; // Declare worker outside try-catch for access in finally block
+                // CRITICAL UNIVERSAL RULE 2: Wrap network requests or async operations in try...catch for error handling.
+                try {
+                    // Create a Tesseract.js worker
+                    worker = await Tesseract.createWorker('eng'); // 'eng' for English language OCR
+
+                    // Perform OCR on the loaded image
+                    // The `recognize` function can take an HTMLImageElement directly.
+                    const { data: { text } } = await worker.recognize(captchaImage);
+
+                    // CRITICAL UNIVERSAL RULE 5: Update status with result.
+                    // Also fulfills Acceptance Criteria: document.querySelector("#solved-text").textContent.length > 0
+                    if (text && text.trim().length > 0) {
+                        solvedText.textContent = `Solved Text: ${text.trim()}`;
+                        statusMessage.textContent = 'Captcha solved successfully!';
+                        statusMessage.style.color = '#28a745'; // Green for success
+                    } else {
+                        // Handle case where OCR runs but finds no text
+                        solvedText.textContent = 'Solved Text: No readable text found or text is empty.';
+                        statusMessage.textContent = 'OCR completed, but no meaningful text was extracted.';
+                        statusMessage.style.color = '#ffc107'; // Yellow for warning
+                    }
+
+                } catch (error) {
+                    // CRITICAL UNIVERSAL RULE 2: Display user-friendly error message on the page.
+                    console.error('Error during OCR processing:', error);
+                    statusMessage.textContent = `Error solving captcha: ${error.message || 'An unknown error occurred during OCR.'}`;
+                    statusMessage.classList.add('error-message'); // Apply error styling
+                    statusMessage.style.color = '#dc3545'; // Red for error
+                    solvedText.textContent = 'Failed to solve captcha due to an internal error.';
+                } finally {
+                    // Always terminate the Tesseract.js worker to free up resources.
+                    if (worker) {
+                        await worker.terminate();
+                        console.log('Tesseract.js worker terminated.');
+                    }
+                }
+            };
+
+            // Handle errors during image loading itself
+            captchaImage.onerror = () => {
+                console.error('Failed to load captcha image from URL:', captchaImageUrl);
+                // CRITICAL UNIVERSAL RULE 5: Provide error feedback.
+                statusMessage.textContent = 'Error: Failed to load captcha image. Please check the network connection or image URL.';
+                statusMessage.classList.add('error-message');
+                statusMessage.style.color = '#dc3545'; // Red for error
+                solvedText.textContent = 'Image loading failed.';
+            };
+
+            // Set the image source, which triggers onload or onerror
+            // CRITICAL UNIVERSAL RULE 4: For non-data: URIs, assign directly to src.
+            captchaImage.src = captchaImageUrl;
+        });
+    </script>
+</body>
+</html>
